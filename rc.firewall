@@ -100,6 +100,9 @@ $IPTABLES -A INPUT -p UDP -s 0/0 --destination-port 65530:65530 -j ACCEPT
 # Allow Qbittorrent
 $IPTABLES -A INPUT -p TCP -s 0/0 --destination-port 65530:65530 -j ACCEPT
 
+# Allow NTP
+$IPTABLES -A INPUT -p TCP -s 0/0 --destination-port 37 -j ACCEPT
+
 # END TCP
 
 # LOCALHOST
