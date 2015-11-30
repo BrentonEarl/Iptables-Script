@@ -79,7 +79,7 @@ $IPTABLES -A INPUT -p ICMP -s 0/0 --icmp-type 8 -j DROP
 $IPTABLES -A INPUT --fragment -p ICMP -j DROP
 
 # DROP INVALIDs
-$IPTABLES -A INVALID -m state -p icmp --state INVALID -j DROP
+$IPTABLES -A INPUT -m state -p icmp --state INVALID -j DROP
 $IPTABLES -A OUTPUT -m state -p icmp --state INVALID -j DROP
 
 # END ICMP
