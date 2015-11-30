@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Iptables - Firewall Script
+# Iptables - Basic Firewall Script
 #
-# Copyright 2015 Brenton Earl <brent@exitstatusone.com
+# Copyright 2015 Brenton Earl <brent@exitstatusone.com>
 #
 # Redistribution and use of this script, with or without modification, is
 # permitted provided that the following conditions are met:

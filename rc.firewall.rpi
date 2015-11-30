@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Iptables Script for my Raspberry Pi Access Point
-# 
-# Copyright 2015 Brenton Earl <brent@exitstatusone.com
+# Iptables - Firewall Script for my Raspberry Pi Access Point
+#
+# Copyright 2015 Brenton Earl <brent@exitstatusone.com>
 #
 # Redistribution and use of this script, with or without modification, is
 # permitted provided that the following conditions are met:
@@ -28,7 +28,7 @@
 # * Uses DNSMasq and HostAPd
 # * LAN Access point -> WAN
 # * LAN Access point -> Intranet -> WAN
-# 
+#
 ##########
 # Usage
 ##########
@@ -53,14 +53,12 @@ WIRELESS_IP='10.0.0.1'
 
 DNS_SERVER1='10.0.0.1' # WiFi DNSMasq
 DNS_SERVER2=''         # WAN DNS
-DNS_SERVER3='8.8.8.8'  # Google DNS as failsafe 
+DNS_SERVER3='8.8.8.8'  # Google DNS as failsafe
 
 $IPTABLES -F
 $IPTABLES -X
 $IPTABLES -t nat -F
 $IPTABLES -t nat -X
-$IPTABLES -t mangle -F
-$IPTABLES -t mangle -X
 
 # DROP Garbage
 ###############
@@ -97,7 +95,7 @@ $IPTABLES -A OUTPUT -m state -p icmp --state INVALID -j DROP
 
 # ACCEPT only certain types of ICMP on $WAN_SUBNET
 $IPTABLES -A INPUT -p ICMP -s $WAN_SUBNET --icmp-type 11 -j ACCEPT
-$IPTABLES -A INPUT -p ICMP -s $WAN_SUBNET --icmp-type 8 -j DROP 
+$IPTABLES -A INPUT -p ICMP -s $WAN_SUBNET --icmp-type 8 -j DROP
 
 # ACCEPT all ICMP on $WIRELESS_SUBNET
 $IPTABLES -A INPUT -p ICMP -s $WIRELESS_SUBNET -j ACCEPT
@@ -105,7 +103,7 @@ $IPTABLES -A INPUT -p ICMP -s $WIRELESS_SUBNET -j ACCEPT
 # END ICMP
 ##########
 
-# NAT 
+# NAT
 ######
 
 # Randomize NAT
@@ -125,18 +123,18 @@ $IPTABLES -A OUTPUT -o lo -j ACCEPT
 ###############
 
 
-# FORWARD, INPUT, OUTPUT Rules 
+# FORWARD, INPUT, OUTPUT Rules
 ##################################
 
 # FORWARD packets
 
 # Only FORWARD packages with TTL > 10
 $IPTABLES -A FORWARD -p tcp -m state --state RELATED,ESTABLISHED -m ttl \
-	--ttl-gt 10 -j ACCEPT 
+	--ttl-gt 10 -j ACCEPT
 $IPTABLES -A FORWARD -p udp -m state --state RELATED,ESTABLISHED -m ttl \
-	--ttl-gt 10 -j ACCEPT 
+	--ttl-gt 10 -j ACCEPT
 $IPTABLES -A FORWARD -p icmp -m state --state RELATED,ESTABLISHED -m ttl \
-	--ttl-gt 10 -j ACCEPT 
+	--ttl-gt 10 -j ACCEPT
 
 # ACCEPT FORWARD NEW and remaining RELATED / ESTABLISHED Connections
 $IPTABLES -A FORWARD -p tcp -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
@@ -149,7 +147,7 @@ $IPTABLES -A FORWARD -p icmp -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
 $IPTABLES -A INPUT -i $WIRELESS_NIC -p UDP --sport 67:68 --dport 67:68 -j ACCEPT
 $IPTABLES -A INPUT -i $WIRELESS_NIC -p TCP --sport 67:68 --dport 67:68 -j ACCEPT
 
-# Serve DNS on $WIRELESS_SUBNET 
+# Serve DNS on $WIRELESS_SUBNET
 $IPTABLES -A INPUT -p TCP -s $WIRELESS_SUBNET --destination-port 53 -j ACCEPT
 $IPTABLES -A INPUT -p UDP -s $WIRELESS_SUBNET --destination-port 53 -j ACCEPT
 
@@ -162,7 +160,7 @@ $IPTABLES -A INPUT -p TCP -s $WIRELESS_SUBNET --destination-port 22 -j ACCEPT
 # Serve HTTPD on $WAN_SUBNET, careful here
 #$IPTABLES -A INPUT -p TCP -s $WAN_SUBNET --destination-port 80 -j ACCEPT
 
-# Serve HTTPD on $WIFI_SUBNET, careful here 
+# Serve HTTPD on $WIFI_SUBNET, careful here
 #$IPTABLES -A INPUT -p TCP -s $WIFI_SUBNET --destination-port 80 -j ACCEPT
 
 # ACCEPT INBOUND RELATED / ESTABLISHED Connections
@@ -182,7 +180,7 @@ $IPTABLES -A OUTPUT -o $WIRELESS_NIC -p TCP -s $WIRELESS_SUBNET \
 $IPTABLES -A OUTPUT -o $WIRELESS_NIC -p UDP -s $WIRELESS_SUBNET \
 	--sport 67:68 --dport 67:68 -j ACCEPT
 
-# ACCEPT OUTBOUND Connections from External $WAN_IP to anywhere 
+# ACCEPT OUTBOUND Connections from External $WAN_IP to anywhere
 # Change this if you wish to restrict external access
 $IPTABLES -A OUTPUT -o $WAN -p tcp -m state -s $WAN_IP -d 0/0 \
 	--state NEW,RELATED,ESTABLISHED -j ACCEPT
@@ -206,7 +204,7 @@ $IPTABLES -A OUTPUT -o $WAN -p tcp -s $WAN_IP -d $DNS_SERVER3 \
 	--dport 53 -j ACCEPT
 
 # ACCEPT OUTBOUND NTP, required, Rpi does not include RTC
-$IPTABLES -A OUTPUT -o $WAN -p udp --dport ntp -s $WAN_IP -j ACCEPT 
+$IPTABLES -A OUTPUT -o $WAN -p udp --dport ntp -s $WAN_IP -j ACCEPT
 
 # ACCEPT OUTBOUND RELATED/ ESTABLISHED Connection
 $IPTABLES -A OUTPUT -p tcp -m state --state RELATED,ESTABLISHED -j ACCEPT
@@ -236,7 +234,7 @@ $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
 	--log-prefix "[ FORWARD - Dead Packet: ] " --log-level 7
 $IPTABLES -A FORWARD -j DROP
 
-# LOG and DROP INPUT 
+# LOG and DROP INPUT
 $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
 	--log-prefix "[ INPUT - Dead Packet ] " --log-level 7
 $IPTABLES -A INPUT -j DROP
