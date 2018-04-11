@@ -1,0 +1,122 @@
+#!/bin/bash
+#
+# Iptables - Firewall Script for a Slackware Server
+# Used for my Raspberry Pi Home Server
+#
+###########
+# Usage
+###########
+#
+# Slackware systems
+# Copy to /etc/rc.d/rc.firewall
+# Execute 'chmod +x /etc/rc.d/rc.firewall'
+# Start by executing '/etc/rc.d/rc.firewall'
+#
+
+IPTABLES='/usr/sbin/iptables'
+WIRED_SUBNET='192.168.x.0/xx'
+WLAN_SUBNET='192.168.x.0/xx'
+SSH_PORT='22'
+
+$IPTABLES -F
+$IPTABLES -X
+
+# Block WINDOWS noise
+$IPTABLES -A INPUT -p UDP -s 0/0 --destination-port 137 -j DROP
+$IPTABLES -A INPUT -p UDP -s 0/0 --destination-port 138 -j DROP
+
+# Drop INVALID packets
+$IPTABLES -A INPUT -p ALL -m state --state INVALID -j DROP
+
+# Block packets in state new that are not syn
+$IPTABLES -A INPUT -p tcp ! --syn -m state --state NEW -j DROP
+
+# Block port scans
+$IPTABLES -A INPUT -p tcp --tcp-flags ALL NONE -j DROP
+$IPTABLES -A INPUT -p tcp --tcp-flags ALL ALL -j DROP
+$IPTABLES -A INPUT -p tcp --tcp-flags ALL FIN,URG,PSH -j DROP
+$IPTABLES -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
+$IPTABLES -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
+$IPTABLES -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+
+# Accept everything from loopback and only 127.0.0.1
+$IPTABLES -A INPUT -i lo -s 127.0.0.1 -d 127.0.0.1 -j ACCEPT
+$IPTABLES -A OUTPUT -o lo -s 127.0.0.1 -d 127.0.0.1 -j ACCEPT
+
+# ICMP
+###############
+
+# Drop ICMP
+# $IPTABLES -A INPUT -p ICMP -s 0/0 -j DROP
+
+# Allow ICMP
+$IPTABLES -A INPUT -p ICMP -s $WIRED_SUBNET -j ACCEPT
+$IPTABLES -A INPUT -p ICMP -s $WLAN_SUBNET -j ACCEPT
+
+# Drop fragmented ICMP packets
+$IPTABLES -A INPUT --fragment -p ICMP -j DROP
+
+# DROP INVALIDs
+$IPTABLES -A INPUT -m state -p icmp --state INVALID -j DROP
+$IPTABLES -A OUTPUT -m state -p icmp --state INVALID -j DROP
+
+# END ICMP
+##############
+
+# Services
+###############
+
+# Allow NTP
+#$IPTABLES -A INPUT -p TCP -s $WIRED_SUBNET --destination-port 37 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -s $WLAN_SUBNET --destination-port 37 -j ACCEPT
+
+# Allow SSH
+$IPTABLES -A INPUT -p TCP -s $WIRED_SUBNET --destination-port $SSH_PORT -j ACCEPT
+$IPTABLES -A INPUT -p TCP -s $WLAN_SUBNET --destination-port $SSH_PORT -j ACCEPT
+
+# Allow HTTPD
+$IPTABLES -A INPUT -p TCP -s $WIRED_SUBNET --destination-port 80 -j ACCEPT
+$IPTABLES -A INPUT -p TCP -s $WLAN_SUBNET --destination-port 80 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -s $WIRED_SUBNET --destination-port 443 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -s $WLAN_SUBNET --destination-port 443 -j ACCEPT
+
+# ACCEPT OUTBOUND NTP, required, Rpi does not include RTC
+$IPTABLES -A OUTPUT -p udp --dport ntp -j ACCEPT
+
+# END Services
+###############
+
+# Logging
+##########
+
+# Log everything else
+$IPTABLES -A INPUT -m limit --limit 5/minute --limit-burst 3 -j LOG \
+  --log-prefix "[ INPUT DROPPED ]"
+$IPTABLES -A OUTPUT -m limit --limit 5/minute --limit-burst 3 -j LOG \
+  --log-prefix "[ OUTPUT DROPPED: ]"
+$IPTABLES -A FORWARD -m limit --limit 5/minute --limit-burst 3 -j LOG \
+  --log-prefix "[ FORWARD DROPPED ]"
+
+# For debugging
+#$IPTABLES -A INPUT -j LOG --log-prefix "[ INPUT DROPPED ]"
+#$IPTABLES -A OUTPUT -j LOG --log-prefix "[ OUTPUT DROPPED: ]"
+#$IPTABLES -A FORWARD -j LOG --log-prefix "[ FORWARD DROPPED ]"
+
+# Global Accept
+################
+
+# Allow NEW, RELATED, ESTABLISHED connections
+$IPTABLES -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPTABLES -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+$IPTABLES -A OUTPUT -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+
+# END Global
+############
+
+# Drop all other packets
+$IPTABLES -A INPUT -j DROP
+$IPTABLES -A FORWARD -j DROP
+$IPTABLES -A OUTPUT -j DROP
+
+# Backup rules to /etc/iptables.rules
+/usr/sbin/iptables-save > /etc/iptables.rules
