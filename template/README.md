@@ -2,4 +2,5 @@
 
 * Do not use this script.
 * It leaves much to be desired.
-* Found in on the internet!
+* It's just an example
+* Found it on the internet!
