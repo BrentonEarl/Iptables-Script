@@ -1,75 +1,46 @@
-#!/bin/bash
+#!/bin/sh
 #
-# Iptables - Firewall Script for my Raspberry Pi Access Point
+# Iptables - Firewall Script for Slackware
+# Used on my Raspberry Pi wireless router
 #
-# Copyright 2015 Brenton Earl <brent@exitstatusone.com>
-#
-# Redistribution and use of this script, with or without modification, is
-# permitted provided that the following conditions are met:
-#
-# 1. Redistributions of this script must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-#
-#  THIS SOFTWARE IS PROVIDED BY THE AUTHOR "AS IS" AND ANY EXPRESS OR IMPLIED
-#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
-#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO
-#  EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-#  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-#  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
-#  OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
-#  WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
-#  OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
-#  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-##########
-# Summary
-##########
-#
-# * Uses DNSMasq and HostAPd
-# * LAN Access point -> WAN
-# * LAN Access point -> Intranet -> WAN
-#
-##########
+###########
 # Usage
-##########
+###########
 #
 # Slackware systems
 # Copy to /etc/rc.d/rc.firewall
-# Edit variables for network
 # Execute 'chmod +x /etc/rc.d/rc.firewall'
 # Start by executing '/etc/rc.d/rc.firewall'
 #
 
+IPTABLES='/usr/sbin/iptables'
 
-IPTABLES="/usr/sbin/iptables"
+WAN_NIC='ethx'
 
-WAN="eth0"
-WAN_SUBNET=''
-WAN_IP=''
+WIRED_NIC='ethx'
+WIRED_GW='192.168.x.1'
+WIRED_SUBNET='192.168.x.0/xx'
 
-WIRELESS_NIC='wlan0'
-WIRELESS_SUBNET='10.0.0.0/24'
-WIRELESS_IP='10.0.0.1'
+WLAN_NIC='wlanx'
+WLAN_GW='192.168.xx.1'
+WLAN_SUBNET='192.168.x.0/xx'
 
-DNS_SERVER1='10.0.0.1' # WiFi DNSMasq
-DNS_SERVER2=''         # WAN DNS
-DNS_SERVER3='8.8.8.8'  # Google DNS as failsafe
+# Set SSH Service Port
+SSH_PORT='22'
 
 $IPTABLES -F
 $IPTABLES -X
 $IPTABLES -t nat -F
 $IPTABLES -t nat -X
 
-# DROP Garbage
-###############
-
-# Drop fragmented ICMP packets
+# Drop fragmented ICMP packates
 $IPTABLES -A INPUT --fragment -p ICMP -j DROP
 
-# Drop INVALID packets immediately
+# Drop INVALID packets
 $IPTABLES -A INPUT -m state --state INVALID -j DROP
+$IPTABLES -A OUTPUT -m state -p icmp --state INVALID -j DROP
 
-# Drop packets in state new that are not syn
+# Drop packets in state new that are not syn packets
 $IPTABLES -A INPUT -p tcp ! --syn -m state --state NEW -j DROP
 
 # Drop port scans
@@ -80,169 +51,88 @@ $IPTABLES -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
 $IPTABLES -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
 $IPTABLES -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
 
-# DROP WINDOWS noise from anywhere
-$IPTABLES -A INPUT -p UDP -s 0/0 --destination-port 137 -j DROP
-$IPTABLES -A INPUT -p UDP -s 0/0 --destination-port 138 -j DROP
-
-# END Garbage
-#############
-
-#ICMP Protocol
-##############
-
-# DROP INVALID outbound ICMP
-$IPTABLES -A OUTPUT -m state -p icmp --state INVALID -j DROP
-
-# ACCEPT only certain types of ICMP on $WAN_SUBNET
-$IPTABLES -A INPUT -p ICMP -s $WAN_SUBNET --icmp-type 11 -j ACCEPT
-$IPTABLES -A INPUT -p ICMP -s $WAN_SUBNET --icmp-type 8 -j DROP
-
-# ACCEPT all ICMP on $WIRELESS_SUBNET
-$IPTABLES -A INPUT -p ICMP -s $WIRELESS_SUBNET -j ACCEPT
-
-# END ICMP
-##########
-
-# NAT
-######
-
-# Randomize NAT
-$IPTABLES -t nat -A POSTROUTING -o $WAN -m state \
-	--state NEW,ESTABLISHED,RELATED -j MASQUERADE --random
-
-# END NAT
-#########
-
-# LOCALHOST
-############
-
+# Allow all from localhost
 $IPTABLES -A INPUT -i lo -j ACCEPT
 $IPTABLES -A OUTPUT -o lo -j ACCEPT
 
-# END LOCALHOST
-###############
+# Allow ICMP on $WIRED_SUBNET and $WLAN_SUBNET
+$IPTABLES -A INPUT -p ICMP -s $WIRED_SUBNET -j ACCEPT
+$IPTABLES -A INPUT -p ICMP -s $WLAN_SUBNET -j ACCEPT
 
+### Services ###
 
-# FORWARD, INPUT, OUTPUT Rules
-##################################
+# Serve DHCP on $WIRED_NIC and $WLAN_NIC
+$IPTABLES -A INPUT -i $WIRED_NIC -p UDP --sport 67:68 --dport 67:68 -j ACCEPT
+$IPTABLES -A INPUT -i $WIRED_NIC -p TCP --sport 67:68 --dport 67:68 -j ACCEPT
+$IPTABLES -A INPUT -i $WLAN_NIC -p UDP --sport 67:68 --dport 67:68 -j ACCEPT
+$IPTABLES -A INPUT -i $WLAN_NIC -p TCP --sport 67:68 --dport 67:68 -j ACCEPT
 
-# FORWARD packets
+# Serve DNS on $WIRED_SUBNET $WLAN_SUBNET
+$IPTABLES -A INPUT -p TCP -s $WIRED_SUBNET --destination-port 53 -j ACCEPT
+$IPTABLES -A INPUT -p UDP -s $WIRED_SUBNET --destination-port 53 -j ACCEPT
+$IPTABLES -A INPUT -p TCP -s $WLAN_SUBNET --destination-port 53 -j ACCEPT
+$IPTABLES -A INPUT -p UDP -s $WLAN_SUBNET --destination-port 53 -j ACCEPT
 
-# Only FORWARD packages with TTL > 10
-$IPTABLES -A FORWARD -p tcp -m state --state RELATED,ESTABLISHED -m ttl \
-	--ttl-gt 10 -j ACCEPT
-$IPTABLES -A FORWARD -p udp -m state --state RELATED,ESTABLISHED -m ttl \
-	--ttl-gt 10 -j ACCEPT
-$IPTABLES -A FORWARD -p icmp -m state --state RELATED,ESTABLISHED -m ttl \
-	--ttl-gt 10 -j ACCEPT
+# Serve SSH Everywhere, careful here
+#$IPTABLES -A INPUT -p TCP -s 0/0 --destination-port $SSH_PORT -j ACCEPT
 
-# ACCEPT FORWARD NEW and remaining RELATED / ESTABLISHED Connections
-$IPTABLES -A FORWARD -p tcp -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A FORWARD -p udp -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A FORWARD -p icmp -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+# Serve SSH ON $WLAN_SUBNET and $WIRED_SUBNET
+$IPTABLES -A INPUT -p TCP -s $WLAN_SUBNET --destination-port $SSH_PORT -j ACCEPT
+$IPTABLES -A INPUT -p TCP -s $WIRED_SUBNET --destination-port $SSH_PORT -j ACCEPT
 
-# INPUT packets
-
-# Serve DHCP on $WIRELESS_NIC
-$IPTABLES -A INPUT -i $WIRELESS_NIC -p UDP --sport 67:68 --dport 67:68 -j ACCEPT
-$IPTABLES -A INPUT -i $WIRELESS_NIC -p TCP --sport 67:68 --dport 67:68 -j ACCEPT
-
-# Serve DNS on $WIRELESS_SUBNET
-$IPTABLES -A INPUT -p TCP -s $WIRELESS_SUBNET --destination-port 53 -j ACCEPT
-$IPTABLES -A INPUT -p UDP -s $WIRELESS_SUBNET --destination-port 53 -j ACCEPT
-
-# Serve SSH on $WAN_SUBNET, careful here
-#$IPTABLES -A INPUT -p TCP -s $WAN_SUBNET --destination-port 22 -j ACCEPT
-
-# Serve SSH On $WIRELESS_SUBNET, careful here, required for administration
-$IPTABLES -A INPUT -p TCP -s $WIRELESS_SUBNET --destination-port 22 -j ACCEPT
-
-# Serve HTTPD on $WAN_SUBNET, careful here
-#$IPTABLES -A INPUT -p TCP -s $WAN_SUBNET --destination-port 80 -j ACCEPT
-
-# Serve HTTPD on $WIFI_SUBNET, careful here
-#$IPTABLES -A INPUT -p TCP -s $WIFI_SUBNET --destination-port 80 -j ACCEPT
-
-# ACCEPT INBOUND RELATED / ESTABLISHED Connections
-$IPTABLES -A INPUT -p tcp -m state --state RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A INPUT -p udp -m state --state RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A INPUT -p icmp -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# OUTPUT packets
-
-# ACCEPT OUTBOUND DHCP to $WAN_SUBNET and $WIRELESS_SUBNET
-$IPTABLES -A OUTPUT -o $WAN -p TCP -s $WAN_SUBNET \
-	--sport 67:68 --dport 67:68 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p UDP -s $WAN_SUBNET \
-	--sport 67:68 --dport 67:68 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WIRELESS_NIC -p TCP -s $WIRELESS_SUBNET \
-	--sport 67:68 --dport 67:68 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WIRELESS_NIC -p UDP -s $WIRELESS_SUBNET \
-	--sport 67:68 --dport 67:68 -j ACCEPT
-
-# ACCEPT OUTBOUND Connections from External $WAN_IP to anywhere
-# Change this if you wish to restrict external access
-$IPTABLES -A OUTPUT -o $WAN -p tcp -m state -s $WAN_IP -d 0/0 \
-	--state NEW,RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p udp -m state -s $WAN_IP -d 0/0 \
-	--state NEW,RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p icmp -m state -s $WAN_IP -d 0/0 \
-	--state NEW,RELATED,ESTABLISHED -j ACCEPT
-
-# ACCEPT OUTPUT DNS Requests
-$IPTABLES -A OUTPUT -o $WAN -p udp -s $WAN_IP -d $DNS_SERVER1 \
-	--dport 53 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p udp -s $WAN_IP -d $DNS_SERVER2 \
-	--dport 53 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p udp -s $WAN_IP -d $DNS_SERVER3 \
-	--dport 53 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p tcp -s $WAN_IP -d $DNS_SERVER1 \
-	--dport 53 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p tcp -s $WAN_IP -d $DNS_SERVER2 \
-	--dport 53 -j ACCEPT
-$IPTABLES -A OUTPUT -o $WAN -p tcp -s $WAN_IP -d $DNS_SERVER3 \
-	--dport 53 -j ACCEPT
+# Serve HTTPD
+#$IPTABLES -A INPUT -p TCP --destination-port 80 -j ACCEPT
 
 # ACCEPT OUTBOUND NTP, required, Rpi does not include RTC
-$IPTABLES -A OUTPUT -o $WAN -p udp --dport ntp -s $WAN_IP -j ACCEPT
+$IPTABLES -A OUTPUT -p udp --dport ntp -j ACCEPT
 
-# ACCEPT OUTBOUND RELATED/ ESTABLISHED Connection
-$IPTABLES -A OUTPUT -p tcp -m state --state RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A OUTPUT -p udp -m state --state RELATED,ESTABLISHED -j ACCEPT
-$IPTABLES -A OUTPUT -p icmp -m state --state RELATED,ESTABLISHED -j ACCEPT
+### End Services ###
 
-# LOGGING
-###########
+# NAT Masquerading $WAN_NIC
+$IPTABLES -t nat -A POSTROUTING -o $WAN_NIC -m state \
+  --state NEW,ESTABLISHED,RELATED -j MASQUERADE
 
-# ICMP
-$IPTABLES -A INPUT -p ICMP --fragment -j LOG --log-prefix "[ ICMP Fragment: ] "
-$IPTABLES -A INPUT -p ICMP -s $WAN_SUBNET -j LOG --log-prefix "[ Ping detected: ] "
-$IPTABLES -A INPUT -p ICMP -s $WIRELESS_SUBNET -j LOG --log-prefix "[ Ping detected: ] "
+# Forward $WIRED_NIC / $WIRED_SUBNET to $WLAN_NIC / $WLAN_SUBNET
+$IPTABLES -A FORWARD -i $WIRED_NIC -o $WLAN_NIC -s $WIRED_SUBNET -d $WLAN_SUBNET -j ACCEPT
+$IPTABLES -A FORWARD -i $WLAN_NIC -o $WIRED_NIC -s $WLAN_SUBNET -d $WIRED_SUBNET -j ACCEPT
 
-# Log INVALID packets and Port Scans
-$IPTABLES -A INPUT -p ALL -m state --state INVALID -j LOG --log-prefix "[ Invalid packet: ] "
-$IPTABLES -A INPUT -p tcp ! --syn -m state --state NEW -j LOG --log-prefix "[ New not syn: ] "
-$IPTABLES -A INPUT -p tcp --tcp-flags ALL NONE -j LOG --log-prefix "[ Bad TCP: ] "
-$IPTABLES -A INPUT -p tcp --tcp-flags ALL ALL -j LOG --log-prefix "[ Bad TCP: ] "
-$IPTABLES -A INPUT -p tcp --tcp-flags ALL FIN,URG,PSH -j LOG --log-prefix "[ Bad TCP: ] "
-$IPTABLES -A INPUT -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j LOG --log-prefix "[ Bad TCP: ] "
-$IPTABLES -A INPUT -p tcp --tcp-flags SYN,RST SYN,RST -j LOG --log-prefix "[ Bad TCP: ] "
-$IPTABLES -A INPUT -p tcp --tcp-flags SYN,FIN SYN,FIN -j LOG --log-prefix "[ Bad TCP: ] "
+# ACCEPT INBOUND RELATED / ESTABLISHED Connections
+$IPTABLES -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-# LOG and DROP FORWARD
+# ACCEPT OUTBOUND NEW / RELATED / ESTABLISHED Connections
+$IPTABLES -A OUTPUT -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+
+# ACCEPT FORWARD NEW / RELATED / ESTABLISHED Connections
+$IPTABLES -A FORWARD -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+
+### Logging ###
+
+# Log ICMP Fragments
+#$IPTABLES -A INPUT -p ICMP --fragment -m limit --limit 3/minute \
+#  --limit-burst 3 -j LOG --log-prefix "[ ICMP Fragment: ] "
+# Log ICMP
+#$IPTABLES -A INPUT -p ICMP -m limit --limit 3/minute \
+#  --limit-burst 3 -j LOG --log-prefix "[ Ping detected: ] "
+
+# LOG FORWARD
 $IPTABLES -A FORWARD -m limit --limit 3/minute --limit-burst 3 -j LOG \
-	--log-prefix "[ FORWARD - Dead Packet: ] " --log-level 7
-$IPTABLES -A FORWARD -j DROP
-
-# LOG and DROP INPUT
+    --log-prefix "[ FORWARD DROPPED: ] "
+# LOG INPUT
 $IPTABLES -A INPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
-	--log-prefix "[ INPUT - Dead Packet ] " --log-level 7
-$IPTABLES -A INPUT -j DROP
-
-# LOG and DROP OUTPUT
+    --log-prefix "[ INPUT DROPPED ] "
+# LOG OUTPUT
 $IPTABLES -A OUTPUT -m limit --limit 3/minute --limit-burst 3 -j LOG \
-       --log-prefix "[ OUTPUT -  Dead Packet: ] " --log-level 7
+         --log-prefix "[ OUTPUT DROPPED: ] "
+
+# For troubleshooting
+#$IPTABLES -A FORWARD -j LOG --log-prefix "[ FORWARD DROPPED: ] "
+#$IPTABLES -A INPUT -j LOG --log-prefix "[ INPUT DROPPED ] "
+#$IPTABLES -A OUTPUT -j LOG  --log-prefix "[ OUTPUT DROPPED: ] "
+
+# Drop everything else
+$IPTABLES -A INPUT -j DROP
 $IPTABLES -A OUTPUT -j DROP
+$IPTABLES -A FORWARD -j DROP
 
 # Backup rules to /etc/iptables.rules
 /usr/sbin/iptables-save > /etc/iptables.rules
